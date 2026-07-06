@@ -9,6 +9,11 @@ scipy>=1.10.0
 scikit-image>=0.21.0
 h5py>=3.9.0
 
+# Logging, Tables & Time
+prettytable>=3.8.0
+pytz>=2023.3
+ntplib>=0.4.0
+
 # Training Infrastructure & Utilities
 tqdm>=4.65.0
 rich>=13.0.0
