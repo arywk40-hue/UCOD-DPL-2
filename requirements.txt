@@ -1,0 +1,16 @@
+# UCOD-ADF Core Dependencies
+torch>=2.0.0
+torchvision>=0.15.0
+timm>=0.9.0
+opencv-python>=4.8.0
+Pillow>=9.5.0
+numpy>=1.24.0
+scipy>=1.10.0
+scikit-image>=0.21.0
+h5py>=3.9.0
+
+# Training Infrastructure & Utilities
+tqdm>=4.65.0
+rich>=13.0.0
+accelerate>=0.22.0
+pytest>=7.4.0
