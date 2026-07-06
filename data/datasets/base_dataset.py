@@ -75,6 +75,8 @@ class BaseCODDataset(Dataset):
             './datasets/RefCOD',
             './RefCOD',
             '../datasets/RefCOD',
+            './data/RefCOD',
+            './data',
             os.path.expanduser('~/datasets/RefCOD'),
             os.path.expanduser('~/Desktop/unsupervised-research/datasets/RefCOD'),
         ]
