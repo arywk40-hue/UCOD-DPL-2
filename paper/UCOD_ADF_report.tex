@@ -1,138 +1,164 @@
-\documentclass[10pt,twocolumn,letterpaper]{article}
+\documentclass[journal,twoside,web]{IEEEtran}
 
-\usepackage{times}
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{algorithm}
 \usepackage{graphicx}
-\usepackage{amsmath}
-\usepackage{amssymb}
+\usepackage{textcomp}
+\usepackage{xcolor}
 \usepackage{booktabs}
 \usepackage{multirow}
-\usepackage{algorithm}
-\usepackage{algorithmic}
-\usepackage{hyperref}
-\usepackage{xcolor}
 \usepackage{subcaption}
-\usepackage[margin=0.75in]{geometry}
+\usepackage{hyperref}
 
 \newcommand{\methodname}{UCOD-ADF}
 \newcommand{\eg}{\emph{e.g.}}
 \newcommand{\ie}{\emph{i.e.}}
 \newcommand{\etal}{\emph{et al.}}
 
-% Empty placeholder for metrics obtained after model training
+% Empty placeholder marker for post-training numbers
 \newcommand{\PENDING}{---}
 
-\title{UCOD-ADF: Unsupervised Camouflaged Object Detection via \\an Agentic Decision Framework}
-
-\author{
-Anonymous Submission
-}
-
 \begin{document}
+
+\title{Autonomous Spatial Decision Making for Unsupervised Camouflaged Object Detection}
+
+\author{Computer Vision Research Laboratory
+\thanks{This work explores an autonomous multi-agent decision framework for self-supervised camouflaged object detection.}}
+
+\markboth{IEEE Transactions on Pattern Analysis and Machine Intelligence,~Vol.~XX, No.~X,~2026}%
+{Research Laboratory: Autonomous Spatial Decision Making for Unsupervised Camouflaged Object Detection}
+
 \maketitle
 
 %==============================================================================
 \begin{abstract}
 %==============================================================================
-Unsupervised Camouflaged Object Detection (UCOD) aims to segment objects that blend into their background without relying on pixel-level ground truth annotations. Existing pseudo-labeling approaches typically use fixed strategies and apply global, scalar weighting functions that assume spatially uniform label noise. However, pseudo-label noise in camouflaged scenes is spatially non-stationary, concentrating heavily at object boundaries, complex textures, and small instance regions.
-
-In this work, we propose \textbf{\methodname{} (Agentic Decision Framework)}, replacing global scalar mixing with an autonomous multi-agent spatial decision system. Our architecture integrates four specialized training agents: (1) a \textbf{Quality Assessment Agent (QAA)} using multi-scale ASPP convolutions and feature gradient sensing; (2) a \textbf{Region Analysis Agent (RAA)} evaluating background context ring contrast and region topology; (3) a \textbf{Memory Agent (MA)} tracking dual-temporal mean and variance dynamics per training sample; and (4) a \textbf{Decision Agent (DA)} with Spatial and Channel Attention (CBAM) gating to synthesize spatial supervision maps $W_i(x,y) \in [0,1]^{H \times W}$. The framework is trained end-to-end with three self-supervised loss terms ($\mathcal{L}_{conf}$, $\mathcal{L}_{region}$, $\mathcal{L}_{temporal}$) while maintaining \textbf{zero inference overhead}. All metrics and empirical evaluations will be populated upon completion of model training.
+Unsupervised Camouflaged Object Detection (UCOD) aims to segment targets visually blended into surrounding environments without human-annotated ground truth masks. Conventional pseudo-labeling pipelines rely on fixed heuristics and global scalar weighting functions that assume spatially uniform label noise. However, pseudo-label noise in camouflaged scenes is inherently non-stationary, concentrating heavily at complex boundaries, low-contrast visual textures, and small instance regions. In this paper, we present \textbf{\methodname{} (Agentic Decision Framework)}, a novel architecture replacing global scalar supervision with an autonomous multi-agent spatial decision system. Our framework integrates four specialized training agents: (1) a \textbf{Quality Assessment Agent (QAA)} utilizing multi-scale ASPP convolutions and feature gradient magnitude sensing; (2) a \textbf{Region Analysis Agent (RAA)} evaluating foreground-to-background context ring contrast and region topology; (3) a \textbf{Memory Agent (MA)} tracking dual-temporal mean and variance dynamics per training sample; and (4) an \textbf{Attention-Gated Decision Agent (DA)} with Spatial and Channel Attention (CBAM) gating to synthesize spatial supervision maps $W_i(x,y) \in [0,1]^{H \times W}$. The framework is optimized end-to-end using three self-supervised loss terms ($\mathcal{L}_{conf}$, $\mathcal{L}_{region}$, $\mathcal{L}_{temporal}$) while maintaining \textbf{zero inference overhead}. All experimental benchmarks and quantitative metrics will be populated upon completion of model training.
 \end{abstract}
+
+\begin{IEEEkeywords}
+Unsupervised Camouflaged Object Detection, Agentic Decision Framework, Spatial Pseudo-Label Calibration, Multi-Agent Learning, Self-Supervised Learning.
+\end{IEEEkeywords}
 
 %==============================================================================
 \section{Introduction}
+\label{sec:introduction}
 %==============================================================================
 
-Camouflaged Object Detection (COD) involves segmenting objects that visually blend into their surrounding background through matching visual patterns and textures~\cite{sinet,zoomnet}. Fully-supervised approaches require expensive pixel-level annotations~\cite{camoteacher}, driving interest in Unsupervised COD (UCOD) where models learn from pseudo-labels generated by fixed strategies.
+\IEEEPARstart{C}{amouflaged} Object Detection (COD) involves segmenting targets that visually merge into their surroundings through matching textures, boundary patterns, and illumination~\cite{sinet,zoomnet}. Fully-supervised approaches rely on dense pixel-level ground truth masks that are labor-intensive to produce~\cite{camoteacher}. This has motivated research into Unsupervised COD (UCOD), where models learn from unlabeled images using foundation feature backbones and pseudo-labeling heuristics.
 
-Existing self-supervised frameworks suffer from a key limitation: they rely on global scalar mixing factors across the entire spatial grid, treating clean object interiors and noisy boundary pixels identically. 
+Current self-supervised segmentation pipelines suffer from a fundamental structural limitation: they apply global, scalar mixing factors across the entire spatial grid, treating clean object interiors and noisy boundary pixels identically. 
 
-We propose \textbf{\methodname{} (Agentic Decision Framework)}, formulating pseudo-label supervision as a multi-agent decision problem during training. By incorporating four autonomous agents (QAA, RAA, MA, DA), our system continuously reasons about spatial reliability, regional difficulty, and temporal stability to produce per-pixel supervision maps $W_i(x,y)$. All four agents operate strictly during training, resulting in \textbf{zero parameter or latency overhead during inference}.
+%------------------------------------------------------------------------
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.95\textwidth]{figures/architecture.png}
+\caption{\textbf{Teaser Diagram of the \methodname{} System Concept (Figure 1).} Instead of global scalar weighting, \methodname{} processes DINOv2 feature maps and pseudo-labels through a four-agent Autonomous Decision Framework (QAA, RAA, MA, DA) to produce per-pixel spatial supervision maps $W_i(x,y)$ during training.}
+\label{fig:teaser}
+\end{figure*}
+%------------------------------------------------------------------------
+
+To overcome this limitation, we present \textbf{\methodname{} (Agentic Decision Framework)}, formulating pseudo-label supervision as an autonomous multi-agent spatial decision problem during training. By incorporating four specialized training agents (QAA, RAA, MA, DA), our system continuously reasons about spatial reliability, regional difficulty, context contrast, and temporal stability to compute spatial supervision maps $W_i(x,y) \in [0,1]^{H \times W}$.
+
+The main contributions of this paper are:
+\begin{enumerate}
+    \item We propose \textbf{\methodname{}}, replacing rigid scalar supervision with a spatial multi-agent decision system.
+    \item We design four specialized training agents: Quality Assessment (QAA), Region Analysis (RAA), Dual-Temporal Memory (MA), and Attention-Gated Decision (DA).
+    \item We introduce three self-supervised loss terms ($\mathcal{L}_{conf}$, $\mathcal{L}_{region}$, $\mathcal{L}_{temporal}$) to train the agentic decision loop end-to-end.
+    \item We prove that \methodname{} operates strictly during training, resulting in \textbf{zero parameter or latency overhead during inference}.
+\end{enumerate}
+
+%==============================================================================
+\section{Related Work}
+\label{sec:related}
+%==============================================================================
+
+\subsection{Unsupervised Camouflaged Object Detection}
+Early unsupervised localization methods like FOUND~\cite{found} and UCOS-DA~\cite{ucosda} leveraged self-supervised Transformer backbones (DINO) to generate background seed masks. UCOD-DPL~\cite{ucoddpl} introduced dynamic pseudo-label mixing and dual-branch adversarial decoders. EASE~\cite{ease} proposed environment-aware prototype libraries. Our work focuses on spatial supervision calibration via multi-agent decision reasoning.
+
+\subsection{Self-Supervised Teacher-Student Frameworks}
+The EMA teacher-student framework originates from Mean Teacher~\cite{meanteacher} and BYOL~\cite{byol}. We extend temporal ensembling through a dedicated Memory Agent maintaining sample-level prediction histories.
 
 %==============================================================================
 \section{Methodology}
-\label{sec:method}
+\label{sec:methodology}
 %==============================================================================
 
 %------------------------------------------------------------------------
-\begin{figure}[t]
+\begin{figure*}[t]
 \centering
-\begin{subfigure}{\linewidth}
+\begin{subfigure}{0.48\textwidth}
   \centering
   \includegraphics[width=\linewidth]{figures/pipeline_placeholder.png}
-  \caption{Overall \methodname{} System Pipeline.}
-  \label{fig:pipeline}
+  \caption{Macro System Training Pipeline.}
+  \label{fig:macro_pipeline}
 \end{subfigure}
-\vspace{3mm}
-\begin{subfigure}{\linewidth}
+\hfill
+\begin{subfigure}{0.48\textwidth}
   \centering
   \includegraphics[width=\linewidth]{figures/agents_placeholder.png}
-  \caption{Internal Multi-Agent Reasoning Architecture.}
-  \label{fig:agents}
+  \caption{Internal Multi-Agent Flow.}
+  \label{fig:agent_flow}
 \end{subfigure}
-\caption{\textbf{Architecture Overview of \methodname{}.} (a) The macro training pipeline combining frozen DINOv2 backbone, Teacher/Student DBA decoders, and the Agentic Decision Framework. (b) The internal data flow across the four training agents (QAA, RAA, MA, DA).}
-\label{fig:architecture}
-\end{figure}
+\caption{\textbf{Detailed Architectural Overview (Figures 2 \& 3).} (a) The complete \methodname{} macro pipeline combining frozen DINOv2 backbone, Teacher/Student decoders, and loss functions. (b) Internal evidence flow across the Quality Assessment, Region Analysis, Memory, and Decision Agents.}
+\label{fig:full_architecture}
+\end{figure*}
 %------------------------------------------------------------------------
 
-\subsection{Overview}
+\subsection{System Overview}
 
-Given an unlabeled input image $I_i$, a frozen DINOv2 backbone extracts features $F_i \in \mathbb{R}^{C \times H \times W}$. A fixed-strategy branch generates a coarse background seed mask $\hat{P}_i^{fs}$. Parallel Student and EMA Teacher Dual-Branch Adversarial (DBA) decoders generate foreground predictions $\hat{Y}_i^{FG}$ and $\hat{P}_i^t$. These inputs feed into the four-agent stack to derive the spatial mixing map $W_i(x,y) \in [0,1]^{H \times W}$.
+Given an unlabeled image $I_i$, a frozen DINOv2 backbone extracts features $F_i \in \mathbb{R}^{C \times H \times W}$. A fixed-strategy branch generates background seed pseudo-label $\hat{P}_i^{fs}$. Parallel Student and EMA Teacher Dual-Branch Adversarial (DBA) decoders generate predictions $\hat{Y}_i^{FG}$ and $\hat{P}_i^t$. The agentic decision framework processes these inputs to construct spatial mixing map $W_i(x,y) \in [0,1]^{H \times W}$.
 
 \subsection{Agent 1: Quality Assessment Agent (QAA)}
 
-The Quality Assessment Agent (QAA) estimates dense spatial reliability $R_i(x,y)$ using Atrous Spatial Pyramid Pooling (ASPP) with dilation rates $\{1, 2, 4, 6\}$ across a 6-channel input:
+QAA estimates dense spatial reliability $R_i(x,y)$ using Atrous Spatial Pyramid Pooling (ASPP) with dilation rates $\{1, 2, 4, 6\}$ across a 6-channel input:
 \begin{equation}
 R_i = \text{QAA}\left([\hat{P}_i^{fs}, \sigma(\hat{P}_i^t), \sigma(\hat{Y}_i^{FG}), D_i, H_i, \|\nabla F_i\|]\right)
 \end{equation}
-where disagreement $D_i = |\sigma(\hat{P}_i^t) - \hat{P}_i^{fs}|$, entropy $H_i = -p\log p - (1-p)\log(1-p)$ with $p = \sigma(\hat{Y}_i^{FG})$, and $\|\nabla F_i\|$ is spatial feature gradient magnitude sensing camouflage visual ambiguity. QAA is calibrated using self-supervised confidence loss:
+where $D_i = |\sigma(\hat{P}_i^t) - \hat{P}_i^{fs}|$, entropy $H_i = -p\log p - (1-p)\log(1-p)$ with $p = \sigma(\hat{Y}_i^{FG})$, and $\|\nabla F_i\|$ is feature gradient magnitude sensing visual ambiguity. QAA is calibrated via:
 \begin{equation}
 \mathcal{L}_{conf} = \text{BCE}\left(R_i(x,y),\ \mathbf{1}\left[D_i(x,y) < 0.3\right]\right)
 \end{equation}
 
 \subsection{Agent 2: Region Analysis Agent (RAA)}
 
-The Region Analysis Agent (RAA) evaluates connected component topology and local background context contrast. For each component $c_k^{FG} \in \text{ConnectComponent}(\sigma(\hat{Y}_i^{FG}) > 0.5)$, RAA measures:
-\begin{enumerate}
-    \item Intra-region feature variance: $\text{feat\_var}_k = \text{Var}_{(x,y) \in c_k}[F_i(x,y)]$
-    \item Boundary gradient strength: $\text{bdry\_grad}_k = \frac{1}{|\partial c_k|}\sum_{\partial c_k} \|\nabla \hat{Y}_i^{FG}\|$
-    \item Background context ring contrast:
-    \begin{equation}
-    \text{contrast}_k = \|\bar{F}_{c_k} - \bar{F}_{\text{bg\_ring}}\|_2
-    \end{equation}
-    where $\text{bg\_ring}$ is a 5-pixel dilated ring surrounding component $c_k$.
-\end{enumerate}
-
-Regions are categorized as Easy, Ambiguous, or Hard. RAA penalizes prediction variance on confident regions via:
+RAA evaluates connected component topology and background ring contrast. For each component $c_k^{FG} \in \text{ConnectComponent}(\sigma(\hat{Y}_i^{FG}) > 0.5)$, RAA measures:
+\begin{equation}
+\text{contrast}_k = \|\bar{F}_{c_k} - \bar{F}_{\text{bg\_ring}}\|_2
+\end{equation}
+where $\text{bg\_ring}$ is a 5-pixel dilated ring surrounding component $c_k$. Regions are classified into Easy, Ambiguous, and Hard categories, penalizing prediction variance on confident regions via:
 \begin{equation}
 \mathcal{L}_{region} = \frac{1}{|C^{FG}|}\sum_{k} \text{Var}_{c_k}\left[\sigma(\hat{Y}_i^{FG})\right] \cdot \mathbf{1}[\text{label}_k = \text{Easy}]
 \end{equation}
 
 \subsection{Agent 3: Memory Agent (MA)}
 
-The Memory Agent (MA) maintains CPU-side sample-level prediction mean $M_i^{(t)}$ and running variance $V_i^{(t)}$ across training epochs:
+MA maintains CPU-side sample-level prediction mean $M_i^{(t)}$ and running variance $V_i^{(t)}$ across epochs:
 \begin{align}
 M_i^{(t)} &= \alpha_m M_i^{(t-1)} + (1-\alpha_m) \sigma(\hat{Y}_i^{FG,(t)}) \\
 V_i^{(t)} &= \alpha_m V_i^{(t-1)} + (1-\alpha_m) \left(\sigma(\hat{Y}_i^{FG,(t)}) - M_i^{(t-1)}\right)^2
 \end{align}
-where decay $\alpha_m = 0.95$. MA provides stability $S_i^{temp} = 1 - |\sigma(\hat{Y}_i^{FG}) - M_i^{(t-1)}|$ and temporal variance $\sigma^2_{temp} = V_i^{(t)}$, with temporal consistency loss:
+yielding stability $S_i^{temp} = 1 - |\sigma(\hat{Y}_i^{FG}) - M_i^{(t-1)}|$ and temporal variance $\sigma^2_{temp} = V_i^{(t)}$, with loss:
 \begin{equation}
 \mathcal{L}_{temporal} = \left\|\sigma(\hat{Y}_i^{FG,(t)}) - M_i^{(t-1)}\right\|_1
 \end{equation}
 
 \subsection{Agent 4: Decision Agent (DA)}
 
-The Decision Agent (DA) fuses multi-agent evidence $[R_i, \text{region\_map}, S_i^{temp}, \sigma^2_{temp}, t/T]$ via Spatial and Channel Attention Gating (CBAM) to compute spatial mixing maps $W_i(x,y)$ and Look-Twice trigger maps $LT_i(x,y)$:
+DA fuses evidence $[R_i, \text{region\_map}, S_i^{temp}, \sigma^2_{temp}, t/T]$ via Spatial and Channel Attention Gating (CBAM) to compute spatial mixing map $W_i(x,y)$:
 \begin{align}
 W_i(x,y) &= \sigma\left(\text{MixHead}\left(\text{CBAM}(\mathbf{x})\right)\right) \\
 LT_i(x,y) &= \sigma\left(\text{LTHead}\left(\text{CBAM}(\mathbf{x})\right)\right)
 \end{align}
 
-The final spatial pseudo-label is constructed per pixel:
+The final spatial pseudo-label is blended per pixel:
 \begin{equation}
 P_i(x,y) = W_i(x,y) \cdot \sigma(\hat{P}_i^t) + (1 - W_i(x,y)) \cdot \hat{P}_i^{fs}
 \end{equation}
 
-\subsection{Total Loss Formulation}
+\subsection{Total Loss Objective}
 
 \begin{equation}
 \mathcal{L}_{total} = \mathcal{L}_{seg} + \mathcal{L}_\bot + 0.5 \mathcal{L}_{conf} + 0.1 \mathcal{L}_{region} + 0.3 \mathcal{L}_{temporal}
@@ -140,9 +166,10 @@ P_i(x,y) = W_i(x,y) \cdot \sigma(\hat{P}_i^t) + (1 - W_i(x,y)) \cdot \hat{P}_i^{
 
 %==============================================================================
 \section{Training Pipeline}
+\label{sec:pipeline}
 %==============================================================================
 
-\begin{algorithm}[t]
+\begin{algorithm}[h]
 \caption{\methodname{} Training Procedure}
 \label{alg:training}
 \begin{algorithmic}[1]
@@ -167,20 +194,20 @@ P_i(x,y) = W_i(x,y) \cdot \sigma(\hat{P}_i^t) + (1 - W_i(x,y)) \cdot \hat{P}_i^{
 \end{algorithm}
 
 %==============================================================================
-\section{Experiments \& Benchmark Results}
+\section{Experiments \& Benchmark Setup}
+\label{sec:experiments}
 %==============================================================================
 
 \subsection{Experimental Settings}
+\textbf{Datasets:} CAMO-Train (1000) + COD10K-Train (3040) without ground-truth labels. Evaluation: CHAMELEON (76), CAMO-Test (250), COD10K-Test (2026), NC4K (4121).
 
-\textbf{Dataset Split:} Training uses CAMO-Train (1000) + COD10K-Train (3040) without ground-truth labels. Evaluation is conducted on CHAMELEON (76), CAMO-Test (250), COD10K-Test (2026), and NC4K (4121).
-
-\textbf{Evaluation Metrics:} S-measure ($S_m$), weighted F-measure ($F_\beta^w$), mean F-measure ($F_\beta^m$), E-measure ($E_\phi$), and Mean Absolute Error ($M$).
+\textbf{Metrics:} S-measure ($S_m$), weighted F-measure ($F_\beta^w$), mean F-measure ($F_\beta^m$), E-measure ($E_\phi$), Mean Absolute Error ($M$).
 
 \subsection{Comparison with State-of-the-Art}
 
 \begin{table*}[t]
 \centering
-\caption{Comparison with state-of-the-art fully-supervised and unsupervised methods on four COD benchmark datasets. Quantitative results for \methodname{} will be populated upon completion of model training.}
+\caption{Comparison with state-of-the-art methods across four COD benchmarks. Quantitative metric values for \methodname{} will be populated post-training.}
 \label{tab:sota}
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{l|ccccc|ccccc|ccccc|ccccc}
@@ -206,11 +233,11 @@ UCOD-DPL'25 & .864 & .825 & .838 & .931 & .031 & .793 & .747 & .779 & .862 & .07
 }
 \end{table*}
 
-\subsection{Ablation Study}
+\subsection{Ablation Study Matrix}
 
 \begin{table}[h]
 \centering
-\caption{Ablation study evaluating individual agent contributions on COD10K-Test. Results will be populated after model training.}
+\caption{Ablation study matrix evaluating individual agent modules on COD10K-Test. Metric values will be populated after training.}
 \label{tab:ablation}
 \begin{tabular}{cccc|ccc}
 \toprule
@@ -226,11 +253,12 @@ $\checkmark$ & $\checkmark$ & $\checkmark$ & CBAM & \PENDING & \PENDING & \PENDI
 
 %==============================================================================
 \section{Complexity Analysis}
+\label{sec:complexity}
 %==============================================================================
 
 \begin{table}[h]
 \centering
-\caption{Parameter and Memory Complexity of \methodname{}.}
+\caption{Parameter and Memory Overhead of \methodname{}.}
 \label{tab:complexity}
 \begin{tabular}{lrrll}
 \toprule
@@ -246,72 +274,68 @@ Decision Agent & $\sim$30K & $O(280HW)$ & Negligible & Yes \\
 \end{tabular}
 \end{table}
 
-\textbf{Zero Inference Latency:} Because QAA, RAA, MA, and DA operate exclusively during training to compute $W_i(x,y)$ for backpropagation, the deployed model at inference time contains zero multi-agent overhead.
+\textbf{Zero Inference Latency:} Because QAA, RAA, MA, and DA operate exclusively during training, the deployed model at inference time contains zero multi-agent overhead.
 
 %==============================================================================
 \section{Conclusion}
+\label{sec:conclusion}
 %==============================================================================
 
-We presented \methodname{}, an autonomous multi-agent decision framework for Unsupervised Camouflaged Object Detection. By replacing global scalar mixing with spatial evidence synthesis across Quality Assessment (QAA), Region Analysis (RAA), Dual Temporal Memory (MA), and Attention-Gated Decision (DA) agents, \methodname{} achieves fine-grained spatial supervision calibration with zero inference overhead. Empirical results will be updated following completion of model training.
+We introduced \methodname{}, an autonomous multi-agent decision framework for Unsupervised Camouflaged Object Detection. By replacing global scalar mixing with spatial evidence synthesis across Quality Assessment (QAA), Region Analysis (RAA), Dual Temporal Memory (MA), and Attention-Gated Decision (DA) agents, \methodname{} achieves spatial supervision calibration with zero inference overhead. Quantitative results will be populated post-training.
 
-%==============================================================================
-% References
-%==============================================================================
-{\small
-\bibliographystyle{ieee_fullname}
-\begin{thebibliography}{20}
+\bibliographystyle{IEEEtran}
+\begin{thebibliography}{10}
 
 \bibitem{ucoddpl}
-W.~Yan, L.~Chen, H.~Ko, S.~Zhang, Y.~Zhang, and L.~Cao.
-\newblock {UCOD-DPL}: Unsupervised Camouflaged Object Detection via Dynamic Pseudo-label Learning.
-\newblock In \emph{CVPR}, 2025.
+W.~Yan, L.~Chen, H.~Ko, S.~Zhang, Y.~Zhang, and L.~Cao,
+``{UCOD-DPL}: Unsupervised Camouflaged Object Detection via Dynamic Pseudo-label Learning,''
+in \emph{Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR)}, 2025.
 
 \bibitem{ease}
-X.~Hao \etal
-\newblock Shift the Lens: Environment-Aware Unsupervised Camouflaged Object Detection.
-\newblock In \emph{CVPR}, 2025.
+X.~Hao \emph{et~al.},
+``Shift the Lens: Environment-Aware Unsupervised Camouflaged Object Detection,''
+in \emph{Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR)}, 2025.
 
 \bibitem{sinet}
-D.~Fan, G.~Ji, G.~Sun, M.~Cheng, J.~Shen, and L.~Shao.
-\newblock Camouflaged Object Detection.
-\newblock In \emph{CVPR}, 2020.
+D.~Fan, G.~Ji, G.~Sun, M.~Cheng, J.~Shen, and L.~Shao,
+``Camouflaged Object Detection,''
+in \emph{Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR)}, 2020.
 
 \bibitem{zoomnet}
-Y.~Pang, X.~Zhao, T.-Z. Xiang, L.~Zhang, and H.~Lu.
-\newblock Zoom in and out: A mixed-scale triplet network for camouflaged object detection.
-\newblock In \emph{CVPR}, 2022.
+Y.~Pang, X.~Zhao, T.-Z. Xiang, L.~Zhang, and H.~Lu,
+``Zoom in and out: A mixed-scale triplet network for camouflaged object detection,''
+in \emph{Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR)}, 2022.
 
 \bibitem{camoteacher}
-X.~Lai \etal
-\newblock CamoTeacher: Dual-Rotation Consistency Learning for Semi-Supervised Camouflaged Object Detection.
-\newblock In \emph{ECCV}, 2024.
+X.~Lai \emph{et~al.},
+``CamoTeacher: Dual-Rotation Consistency Learning for Semi-Supervised Camouflaged Object Detection,''
+in \emph{Proc. Eur. Conf. Comput. Vis. (ECCV)}, 2024.
 
 \bibitem{found}
-O.~Sim{\'e}oni \etal
-\newblock Unsupervised Object Localization: Observing the Background to Discover Objects.
-\newblock In \emph{CVPR}, 2023.
+O.~Sim{\'e}oni \emph{et~al.},
+``Unsupervised Object Localization: Observing the Background to Discover Objects,''
+in \emph{Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR)}, 2023.
 
 \bibitem{ucosda}
-O.~Sim{\'e}oni \etal
-\newblock Unsupervised Object Localization with Self-supervised Transformers.
-\newblock 2023.
+O.~Sim{\'e}oni \emph{et~al.},
+``Unsupervised Object Localization with Self-supervised Transformers,''
+2023.
 
 \bibitem{dino}
-M.~Caron \etal
-\newblock Emerging Properties in Self-Supervised Vision Transformers.
-\newblock In \emph{ICCV}, 2021.
+M.~Caron \emph{et~al.},
+``Emerging Properties in Self-Supervised Vision Transformers,''
+in \emph{Proc. IEEE/CVF Int. Conf. Comput. Vis. (ICCV)}, 2021.
 
 \bibitem{byol}
-J.-B.~Grill \etal
-\newblock Bootstrap Your Own Latent: A New Approach to Self-Supervised Learning.
-\newblock In \emph{NeurIPS}, 2020.
+J.-B. Grill \emph{et~al.},
+``Bootstrap Your Own Latent: A New Approach to Self-Supervised Learning,''
+in \emph{Proc. Adv. Neural Inf. Process. Syst. (NeurIPS)}, 2020.
 
 \bibitem{meanteacher}
-A.~Tarvainen and H.~Valpola.
-\newblock Mean Teachers are Better Role Models.
-\newblock In \emph{NeurIPS}, 2017.
+A.~Tarvainen and H.~Valpola,
+``Mean Teachers are Better Role Models,''
+in \emph{Proc. Adv. Neural Inf. Process. Syst. (NeurIPS)}, 2017.
 
 \end{thebibliography}
-}
 
 \end{document}
