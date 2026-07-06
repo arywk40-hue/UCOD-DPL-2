@@ -33,6 +33,9 @@ class CacheManager:
     
     def read_file(self, index: int) -> Any:
         """Read cached file by index."""
+        # Return None if cache is in write mode (not yet populated)
+        if self.mode == 'w':
+            return None
         return self.io.read_file(index)
     
     def length(self) -> int:

@@ -203,7 +203,7 @@ class BaseCODDataset(Dataset):
         # Load pseudo label if available
         pseudo_label = None
         pseudo_label_cache = self.cache_manager.get_pseudo_label_cache()
-        if pseudo_label_cache:
+        if pseudo_label_cache and pseudo_label_cache.mode == 'r':
             pseudo_label = pseudo_label_cache.read_file(index)
         
         return {
