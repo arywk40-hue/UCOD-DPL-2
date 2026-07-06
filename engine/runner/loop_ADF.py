@@ -185,7 +185,14 @@ class ADFTrainLoop:
 
         h = w = self.cfg.model_cfg.feature_size
         features = F.interpolate(features, size=(h, w), mode='bilinear')
-        pseudo_labels = F.interpolate(pseudo_labels, size=(h, w), mode='bilinear').float()
+        
+        # Handle None pseudo_labels (unpopulated cache) by creating dummy labels
+        if isinstance(pseudo_labels, list):
+            # Create initial pseudo labels with zeros (will be replaced by teacher predictions)
+            batch_size = features.shape[0]
+            pseudo_labels = torch.zeros((batch_size, 1, h, w), device=features.device).float()
+        else:
+            pseudo_labels = F.interpolate(pseudo_labels, size=(h, w), mode='bilinear').float()
 
         batch_size = features.shape[0]
 

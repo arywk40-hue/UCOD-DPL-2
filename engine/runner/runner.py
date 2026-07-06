@@ -196,11 +196,13 @@ class BaseRunner(ABC):
             checkpoint_path: Path to checkpoint, uses config default if None
         """
         self.start_epoch = 0
-        checkpoint_path = self.config.train_cfg.get('checkpoint', None)
+        checkpoint_path = checkpoint_path or self.config.train_cfg.get('checkpoint', None)
         if checkpoint_path is None:
             checkpoint_path = self._find_latest_checkpoint('ckp')
+        if checkpoint_path is None:
+            self.logger.info("No checkpoint specified or discovered; starting from scratch")
+            return
         try:
-            checkpoint_path = os.path.join(checkpoint_path)
             state_dict = load_file(checkpoint_path, device="cuda")
             self.model.load_state_dict(state_dict)
             self.logger.info("Successfully loaded checkpoint weights from {}".format(checkpoint_path))
@@ -842,5 +844,4 @@ __all__ = [
     'create_runner',
     'get_available_runner_types'
 ]
-
 

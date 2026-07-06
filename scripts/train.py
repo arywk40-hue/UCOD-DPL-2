@@ -18,6 +18,12 @@ def init_cfg(args) -> CfgNode:
     )
     os.makedirs(cfg.work_dir, exist_ok=True)
     cfg.launcher = args.launcher
+    if args.load_from is not None:
+        cfg.train_cfg.checkpoint = args.load_from
+    if args.resume is not None:
+        cfg.train_cfg.resume = args.resume
+    if args.refiner_path is not None:
+        cfg.train_cfg.refiner_path = args.refiner_path
     return cfg
 
 def main():
