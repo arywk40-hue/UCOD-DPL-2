@@ -53,8 +53,9 @@ class BaseCODDataset(Dataset):
         # Initialize cache managers
         self._setup_cache_managers()
         
-        # Prepare cache if needed
-        if self.cache_manager.get_features_cache().mode == 'w':
+        # Prepare cache if needed or if existing cache is empty
+        features_cache = self.cache_manager.get_features_cache()
+        if features_cache.mode == 'w' or features_cache.length() == 0:
             self._prepare_cache()
     
     def _setup_transforms(self) -> None:
