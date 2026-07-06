@@ -40,6 +40,7 @@ from engine.config import CfgNode
 # Training loops
 from .loop_UCOD_DPL import TrainLoop, ValLoop_Look_Twice
 from .loop_CORAL import LocalRefineTrainLoop, LocalRefineValidationLoop
+from .loop_ADF import ADFTrainLoop
 from .utils import extract_func_args
 
 class BaseRunner(ABC):
@@ -397,6 +398,121 @@ class StandardRunner(BaseRunner):
             raise
 
 
+class ADFRunner(BaseRunner):
+    """
+    Agentic Decision Framework runner.
+    
+    Replaces APM/discriminator with a 4-agent spatial decision system.
+    No discriminator is built or trained. Agent modules (QAA, DA) are
+    created inside the ADFTrainLoop and added to the optimizer.
+    """
+    
+    def __init__(self, config: CfgNode):
+        """Initialize ADFRunner."""
+        self.model = None
+        self.optimizer = None
+        self.lr_scheduler = None
+        self.train_dataloader = None
+        self.val_dataloader = None
+        
+        super().__init__(config)
+    
+    def _build_model(self) -> None:
+        """Build baseline model only — no discriminator needed."""
+        try:
+            self.model = baseline(self.config.model_cfg)
+            self.load_checkpoint()
+            self.logger.info("Successfully built baseline model for ADF (no discriminator)")
+        except Exception as e:
+            raise RuntimeError(f"Failed to build model: {e}")
+    
+    def _build_optimizer(self) -> None:
+        """Build optimizer and scheduler for model only."""
+        try:
+            config = self.config.train_cfg
+            self.optimizer = torch.optim.AdamW(
+                self.model.parameters(),
+                lr=config.lr0
+            )
+            self.lr_scheduler = torch.optim.lr_scheduler.StepLR(
+                self.optimizer,
+                step_size=config.step_lr_size,
+                gamma=config.step_lr_gamma
+            )
+            self.logger.info("Successfully built optimizer and scheduler for ADF")
+        except Exception as e:
+            raise RuntimeError(f"Failed to build optimizer: {e}")
+    
+    def _build_dataloader(self) -> None:
+        """Build standard data loaders."""
+        try:
+            factory = DataLoaderFactory()
+            self.train_dataloader = factory.create_train_loader(
+                self.config.dataset_cfg,
+            )
+            self.val_dataloader = factory.create_test_loader(
+                self.config.dataset_cfg,
+            )
+            self.logger.info("Successfully built data loaders for ADF")
+        except Exception as e:
+            raise RuntimeError(f"Failed to build data loaders: {e}")
+    
+    def _prepare_accelerator(self) -> None:
+        """Prepare components for distributed training — no discriminator."""
+        required_components = {
+            'accelerator': self.accelerator,
+            'model': self.model,
+            'optimizer': self.optimizer,
+            'train_dataloader': self.train_dataloader,
+            'lr_scheduler': self.lr_scheduler,
+        }
+        
+        for name, component in required_components.items():
+            if component is None:
+                raise RuntimeError(f"{name} has not been initialized")
+        
+        try:
+            (
+                self.model,
+                self.optimizer,
+                self.train_dataloader,
+                self.lr_scheduler,
+            ) = self.accelerator.prepare(
+                self.model,
+                self.optimizer,
+                self.train_dataloader,
+                self.lr_scheduler,
+            )
+            
+            self.model = self.model.module if hasattr(self.model, "module") else self.model
+            self.val_dataloader = self.accelerator.prepare(self.val_dataloader)
+            
+            self.logger.info("Successfully prepared ADF components for distributed training")
+        except Exception as e:
+            raise RuntimeError(f"Failed to prepare accelerator: {e}")
+    
+    def start_finetune(self):
+        self._build_optimizer()
+    
+    def launch_train(self) -> None:
+        """Launch ADF training loop."""
+        try:
+            self.trainloop = ADFTrainLoop(self.config, self)
+            self.trainloop.run()
+        except Exception as e:
+            self.logger.error(f"ADF training failed: {e}")
+            raise
+    
+    def launch_val_look_twice(self) -> Any:
+        """Launch look-twice validation (shared with standard runner)."""
+        try:
+            loop = ValLoop_Look_Twice(self.config, self)
+            return loop.run()
+        except Exception as e:
+            self.logger.error(f"Look-twice validation failed: {e}")
+            raise
+
+
 class LocalRefineRunner(BaseRunner):
     """
     Local refinement training runner with sparse refiner.
@@ -603,6 +719,7 @@ class RunnerFactory:
     
     _RUNNER_TYPES = {
         'standard': StandardRunner,
+        'adf': ADFRunner,
         'local_refine': LocalRefineRunner,
         'lr': LocalRefineRunner,  # Alias
     }
@@ -640,6 +757,10 @@ class RunnerFactory:
         Returns:
             Detected runner type
         """
+        # Check for ADF mode
+        if hasattr(config, 'train_cfg') and config.train_cfg.get('merge_method') == 'adf':
+            return 'adf'
+        
         # Check for local refinement indicators
         if hasattr(config, 'model_cfg') and hasattr(config.model_cfg, 'window_size'):
             return 'local_refine'
@@ -713,6 +834,7 @@ def get_available_runner_types() -> list:
 __all__ = [
     'BaseRunner',
     'StandardRunner',
+    'ADFRunner',
     'LocalRefineRunner', 
     'Runner',  # Deprecated, but kept for compatibility
     'Runner_local_refine',  # Deprecated alias

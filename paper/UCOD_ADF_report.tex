@@ -1,0 +1,361 @@
+\documentclass[10pt,twocolumn,letterpaper]{article}
+
+\usepackage{times}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{subcaption}
+\usepackage[margin=0.75in]{geometry}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,backgrounds,shapes.geometric,shadows,calc}
+
+\newcommand{\methodname}{UCOD-ADF}
+\newcommand{\eg}{\emph{e.g.}}
+\newcommand{\ie}{\emph{i.e.}}
+\newcommand{\etal}{\emph{et al.}}
+
+% Status markers for ongoing research
+\newcommand{\PENDING}{\textcolor{blue}{\textbf{[Pending GPU Run]}}}
+\newcommand{\HYPOTHESIS}[1]{\textcolor{purple}{\textbf{Research Hypothesis:} #1}}
+
+% Color Palette for Architecture Diagrams
+\definecolor{backblue}{RGB}{235,243,250}
+\definecolor{teachgreen}{RGB}{220,245,220}
+\definecolor{studblue}{RGB}{215,230,250}
+\definecolor{agentpurple}{RGB}{235,225,255}
+\definecolor{agentdark}{RGB}{100,60,180}
+\definecolor{accentorange}{RGB}{255,235,215}
+
+\title{Autonomous Spatial Decision Making for Unsupervised \\Camouflaged Object Detection: A Research Exploration}
+
+\author{
+Unsupervised Computer Vision Research Initiative
+}
+
+\begin{document}
+\maketitle
+
+%==============================================================================
+\begin{abstract}
+%==============================================================================
+Unsupervised Camouflaged Object Detection (UCOD) aims to segment hidden targets without human annotations. Existing self-supervised frameworks rely heavily on fixed pseudo-labeling heuristics and scalar weighting functions that assume spatially uniform label noise. However, pseudo-label noise in camouflaged scenes is inherently non-stationary, concentrating around complex boundaries, low-contrast textures, and small instances.
+
+In this research exploration, we propose \textbf{\methodname{} (Agentic Decision Framework)}, an experimental architecture investigating whether an autonomous multi-agent decision system can adaptively learn spatial supervision maps $W_i(x,y) \in [0,1]^{H \times W}$. Our system incorporates four specialized training agents: (1) a \textbf{Quality Assessment Agent (QAA)} utilizing multi-scale ASPP convolutions and feature gradient sensing; (2) a \textbf{Region Analysis Agent (RAA)} analyzing local background context ring contrast; (3) a \textbf{Memory Agent (MA)} tracking dual-temporal mean and variance dynamics per training sample; and (4) an \textbf{Attention-Gated Decision Agent (DA)} with CBAM attention gating. We formalize the complete mathematical design, loss functions ($\mathcal{L}_{conf}$, $\mathcal{L}_{region}$, $\mathcal{L}_{temporal}$), and an empirical benchmark evaluation protocol. This working paper documents our architectural formulation prior to full GPU cluster training and validation.
+\end{abstract}
+
+%==============================================================================
+\section{Research Motivation \& Questions}
+%==============================================================================
+
+Camouflaged Object Detection (COD) requires segmenting targets visually seamlessly integrated into their surroundings~\cite{sinet,zoomnet}. Unsupervised learning eliminates reliance on expensive pixel-level labels~\cite{camoteacher}, but introduces severe challenges regarding pseudo-label reliability.
+
+Traditional approaches apply global scalar mixing weights across the spatial grid. We hypothesize that scalar mixing is sub-optimal for camouflaged objects because pseudo-label quality varies drastically across image regions. 
+
+This research exploration is guided by three primary Research Questions (RQs):
+\begin{itemize}
+    \item \textbf{RQ1 (Spatial vs. Global Calibration):} Does replacing global scalar weighting with dense spatial supervision maps $W_i(x,y)$ improve segmentation boundary precision and target recall?
+    \item \textbf{RQ2 (Multi-Agent Synergies):} How do quality assessment (QAA), background context contrast (RAA), and temporal memory (MA) interact when fused via attention gating (DA)?
+    \item \textbf{RQ3 (Computational Efficiency):} Can multi-agent supervision reasoning be conducted entirely during training to preserve zero inference overhead?
+\end{itemize}
+
+%==============================================================================
+\section{System Architecture}
+%==============================================================================
+
+%------------------------------------------------------------------------
+\begin{figure*}[t]
+\centering
+\begin{tikzpicture}[
+    node distance=0.7cm and 1.0cm,
+    box/.style={draw=black!70, fill=white, rounded corners=3pt, align=center, font=\sffamily\footnotesize, inner sep=4pt},
+    agent/.style={draw=agentdark, fill=agentpurple, rounded corners=4pt, align=center, font=\sffamily\footnotesize\bfseries, inner sep=5pt},
+    feat/.style={draw=blue!70, fill=studblue, rounded corners=3pt, align=center, font=\sffamily\scriptsize},
+    teach/.style={draw=green!60!black, fill=teachgreen, rounded corners=3pt, align=center, font=\sffamily\scriptsize},
+    arrow/.style={-Stealth, thick, draw=black!70}
+]
+
+% Top pipeline nodes
+\node [box, fill=backblue] (img) {Input Image $I_i$};
+\node [box, fill=backblue, right=of img] (backbone) {Frozen DINOv2\\Backbone};
+\node [feat, right=of backbone] (featmap) {Feature Map\\$F_i \in \mathbb{R}^{C \times H \times W}$};
+
+\node [teach, above right=0.3cm and 0.8cm of featmap] (teacher) {EMA Teacher\\DBA Decoder};
+\node [feat, below right=0.3cm and 0.8cm of featmap] (student) {Student DBA\\Decoder};
+
+\node [box, fill=gray!15, above=0.6cm of featmap] (fixed) {Fixed Strategy\\$\hat{P}_i^{fs}$};
+
+% Agent Panel container
+\node [agent, right=1.2cm of featmap, minimum height=3.2cm, minimum width=4.5cm, label={[agentdark]above:\textbf{Agentic Decision Framework (ADF)}}] (adfpanel) {};
+
+% Agents inside ADF
+\node [agent, draw=purple!80!black, fill=purple!10, inner sep=3pt, yshift=0.9cm] (qaa) at (adfpanel.center) {Agent 1: QAA\\{\scriptsize (Multi-scale ASPP)}};
+\node [agent, draw=purple!80!black, fill=purple!10, inner sep=3pt, yshift=0.3cm] (raa) at (adfpanel.center) {Agent 2: RAA\\{\scriptsize (Context Ring Contrast)}};
+\node [agent, draw=purple!80!black, fill=purple!10, inner sep=3pt, yshift=-0.3cm] (ma) at (adfpanel.center) {Agent 3: Memory Agent\\{\scriptsize (Mean + Variance EMA)}};
+\node [agent, draw=purple!80!black, fill=purple!10, inner sep=3pt, yshift=-0.9cm] (da) at (adfpanel.center) {Agent 4: Decision Agent\\{\scriptsize (CBAM Attention)}};
+
+% Output node
+\node [box, fill=accentorange, right=1.0cm of adfpanel] (mixmap) {Spatial Mixing Map\\$W_i(x,y) \in [0,1]^{H \times W}$\\\& Spatial Pseudo-Label $P_i$};
+
+% Connections
+\draw [arrow] (img) -- (backbone);
+\draw [arrow] (backbone) -- (featmap);
+\draw [arrow] (featmap) |- (teacher);
+\draw [arrow] (featmap) |- (student);
+\draw [arrow] (fixed) -| (adfpanel);
+\draw [arrow] (teacher) -| (adfpanel);
+\draw [arrow] (student) -| (adfpanel);
+\draw [arrow] (adfpanel) -- (mixmap);
+
+\end{tikzpicture}
+\caption{\textbf{Proposed \methodname{} System Pipeline.} Features from DINOv2 feed parallel Teacher/Student decoders. The 4-Agent Autonomous Decision Framework computes spatial supervision maps $W_i(x,y)$ to guide student gradient updates.}
+\label{fig:architecture}
+\end{figure*}
+%------------------------------------------------------------------------
+
+Figure~\ref{fig:architecture} shows the proposed research architecture. Given an image $I_i$, a frozen DINOv2 backbone extracts high-level semantic features $F_i$. Parallel Student and Teacher Dual-Branch Adversarial (DBA) decoders generate foreground predictions $\hat{Y}_i^{FG}$ and $\hat{P}_i^t$. The four agents process these signals to form per-pixel spatial supervision maps $W_i(x,y)$.
+
+%==============================================================================
+\section{Multi-Agent Methodology}
+\label{sec:method}
+%==============================================================================
+
+%------------------------------------------------------------------------
+\begin{figure*}[t]
+\centering
+\begin{tikzpicture}[
+    node distance=0.5cm and 0.8cm,
+    block/.style={draw=agentdark, fill=agentpurple, rounded corners=4pt, align=center, font=\sffamily\scriptsize, inner sep=4pt},
+    subblock/.style={draw=black!60, fill=white, rounded corners=2pt, align=center, font=\sffamily\tiny, inner sep=3pt},
+    arrow/.style={-Stealth, thick, draw=agentdark}
+]
+
+% Agent 1 QAA
+\node [block, minimum width=3.8cm, minimum height=2.2cm] (qaa_box) {};
+\node [font=\sffamily\bfseries\scriptsize, anchor=north] at (qaa_box.north) {Agent 1: Quality Assessment (QAA)};
+\node [subblock, yshift=-0.2cm] (qaa_in) at (qaa_box.center) {Input: $[\hat{P}_i^{fs}, \sigma(\hat{P}_i^t), \sigma(\hat{Y}_i^{FG}), D_i, H_i, \|\nabla F_i\|]$};
+\node [subblock, below=0.2cm of qaa_in] (qaa_core) {Multi-Scale ASPP ($\cdot 1, \cdot 2, \cdot 4, \cdot 6$)};
+\node [subblock, below=0.2cm of qaa_core] (qaa_out) {Output: Reliability Map $R_i(x,y)$};
+
+% Agent 2 RAA
+\node [block, right=0.8cm of qaa_box, minimum width=3.8cm, minimum height=2.2cm] (raa_box) {};
+\node [font=\sffamily\bfseries\scriptsize, anchor=north] at (raa_box.north) {Agent 2: Region Analysis (RAA)};
+\node [subblock, yshift=-0.2cm] (raa_in) at (raa_box.center) {Input: Connected Components $c_k^{FG}$ \& Features $F_i$};
+\node [subblock, below=0.2cm of raa_in] (raa_core) {Ring Contrast $\|\bar{F}_{c_k} - \bar{F}_{\text{bg\_ring}}\|$};
+\node [subblock, below=0.2cm of raa_core] (raa_out) {Output: Region Map (Easy/Hard/Ambiguous)};
+
+% Agent 3 MA
+\node [block, right=0.8cm of raa_box, minimum width=3.8cm, minimum height=2.2cm] (ma_box) {};
+\node [font=\sffamily\bfseries\scriptsize, anchor=north] at (ma_box.north) {Agent 3: Memory Agent (MA)};
+\node [subblock, yshift=-0.2cm] (ma_in) at (ma_box.center) {Input: Sample Index $i$ \& Student Prediction};
+\node [subblock, below=0.2cm of ma_in] (ma_core) {Dual EMA: Mean $M_i^{(t)}$ + Variance $V_i^{(t)}$};
+\node [subblock, below=0.2cm of ma_core] (ma_out) {Output: Stability $S_i^{temp}$ \& Variance $\sigma^2_{temp}$};
+
+% Agent 4 DA
+\node [block, below=0.8cm of raa_box, xshift=-0.2cm, minimum width=8.0cm, minimum height=1.8cm] (da_box) {};
+\node [font=\sffamily\bfseries\scriptsize, anchor=north] at (da_box.north) {Agent 4: Attention-Gated Decision Agent (DA)};
+\node [subblock, yshift=-0.1cm] (da_in) at (da_box.center) {Inputs: $[R_i, \text{region\_map}, S_i^{temp}, \sigma^2_{temp}, t/T]$};
+\node [subblock, below=0.15cm of da_in] (da_core) {CBAM Spatial \& Channel Attention Gating};
+\node [subblock, below=0.15cm of da_core] (da_out) {Output: Spatial Mixing Map $W_i(x,y)$ \& Look-Twice Triggers $LT_i(x,y)$};
+
+% Flow arrows
+\draw [arrow] (qaa_box) |- (da_box);
+\draw [arrow] (raa_box) -- (da_box);
+\draw [arrow] (ma_box) |- (da_box);
+
+\end{tikzpicture}
+\caption{\textbf{Data Flow Across the Four Training Agents.} Evidence is collected across spatial reliability, regional background contrast, and sample temporal memory before attention-guided decision synthesis.}
+\label{fig:agents}
+\end{figure*}
+%------------------------------------------------------------------------
+
+\subsection{Agent 1: Quality Assessment Agent (QAA)}
+
+QAA predicts dense spatial reliability $R_i \in [0,1]^{H \times W}$ using ASPP convolutions across dilation rates $\{1, 2, 4, 6\}$:
+\begin{equation}
+R_i = \text{QAA}\left([\hat{P}_i^{fs}, \sigma(\hat{P}_i^t), \sigma(\hat{Y}_i^{FG}), D_i, H_i, \|\nabla F_i\|]\right)
+\end{equation}
+where $D_i = |\sigma(\hat{P}_i^t) - \hat{P}_i^{fs}|$, entropy $H_i = -p\log p - (1-p)\log(1-p)$, and $\|\nabla F_i\|$ is spatial feature gradient magnitude sensing local visual ambiguity. Self-supervised calibration is enforced via:
+\begin{equation}
+\mathcal{L}_{conf} = \text{BCE}\left(R_i(x,y),\ \mathbf{1}\left[D_i(x,y) < 0.3\right]\right)
+\end{equation}
+
+\subsection{Agent 2: Region Analysis Agent (RAA)}
+
+RAA evaluates region topology and background ring contrast for connected components $c_k^{FG}$:
+\begin{equation}
+\text{contrast}_k = \|\bar{F}_{c_k} - \bar{F}_{\text{bg\_ring}}\|_2
+\end{equation}
+where $\text{bg\_ring}$ is a 5-pixel dilated background ring around $c_k$. Regions are classified into Easy, Hard, and Ambiguous categories, penalizing prediction variance on confident regions via $\mathcal{L}_{region}$.
+
+\subsection{Agent 3: Memory Agent (MA)}
+
+MA tracks CPU-side sample-level prediction mean $M_i^{(t)}$ and running variance $V_i^{(t)}$ across training epochs:
+\begin{align}
+M_i^{(t)} &= \alpha_m M_i^{(t-1)} + (1-\alpha_m) \sigma(\hat{Y}_i^{FG,(t)}) \\
+V_i^{(t)} &= \alpha_m V_i^{(t-1)} + (1-\alpha_m) \left(\sigma(\hat{Y}_i^{FG,(t)}) - M_i^{(t-1)}\right)^2
+\end{align}
+yielding stability $S_i^{temp} = 1 - |\sigma(\hat{Y}_i^{FG}) - M_i^{(t-1)}|$ and variance $\sigma^2_{temp} = V_i^{(t)}$ with loss $\mathcal{L}_{temporal}$.
+
+\subsection{Agent 4: Decision Agent (DA)}
+
+DA applies CBAM spatial and channel attention over fused evidence $[R_i, \text{region\_map}, S_i^{temp}, \sigma^2_{temp}, t/T]$ to produce spatial mixing maps $W_i(x,y)$:
+\begin{equation}
+P_i(x,y) = W_i(x,y) \cdot \sigma(\hat{P}_i^t) + (1 - W_i(x,y)) \cdot \hat{P}_i^{fs}
+\end{equation}
+
+\subsection{Total Loss Formulation}
+\begin{equation}
+\mathcal{L}_{total} = \mathcal{L}_{seg} + \mathcal{L}_\bot + 0.5 \mathcal{L}_{conf} + 0.1 \mathcal{L}_{region} + 0.3 \mathcal{L}_{temporal}
+\end{equation}
+
+%==============================================================================
+\section{Experimental Protocol \& Planned Benchmark Evaluation}
+%==============================================================================
+
+To rigorously evaluate whether \methodname{} improves segmentation fidelity, we establish an evaluation protocol benchmarked against existing fully-supervised, semi-supervised, and unsupervised baseline methods across four standard COD datasets: CHAMELEON (76), CAMO-Test (250), COD10K-Test (2026), and NC4K (4121).
+
+\begin{table*}[t]
+\centering
+\caption{\textbf{Benchmark Comparison Table Setup.} Quantitative results across CHAMELEON, CAMO, COD10K, and NC4K test sets. Experimental results for \methodname{} will be populated upon completion of GPU cluster training runs.}
+\label{tab:sota}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{l|ccccc|ccccc|ccccc|ccccc}
+\toprule
+\multirow{2}{*}{Method} & \multicolumn{5}{c|}{CHAMELEON (76)} & \multicolumn{5}{c|}{CAMO-Test (250)} & \multicolumn{5}{c|}{COD10K-Test (2026)} & \multicolumn{5}{c}{NC4K (4121)} \\
+& $S_m\uparrow$ & $F_\beta^w\uparrow$ & $F_\beta^m\uparrow$ & $E_\phi\uparrow$ & $M\downarrow$
+& $S_m\uparrow$ & $F_\beta^w\uparrow$ & $F_\beta^m\uparrow$ & $E_\phi\uparrow$ & $M\downarrow$
+& $S_m\uparrow$ & $F_\beta^w\uparrow$ & $F_\beta^m\uparrow$ & $E_\phi\uparrow$ & $M\downarrow$
+& $S_m\uparrow$ & $F_\beta^w\uparrow$ & $F_\beta^m\uparrow$ & $E_\phi\uparrow$ & $M\downarrow$ \\
+\midrule
+\multicolumn{21}{l}{\textit{Fully-Supervised Methods}} \\
+HitNet'23 & .921 & .897 & .900 & .972 & .019 & .849 & .809 & .831 & .906 & .055 & .871 & .806 & .823 & .935 & .023 & .875 & .834 & .853 & .926 & .037 \\
+BiRefNet'24 & .929 & .911 & .922 & .968 & .016 & .932 & .914 & .922 & .974 & .015 & .913 & .874 & .888 & .960 & .014 & .914 & .894 & .909 & .953 & .023 \\
+\midrule
+\multicolumn{21}{l}{\textit{Unsupervised Methods}} \\
+FOUND'23 & .829 & .757 & .781 & .911 & .040 & .770 & .704 & .740 & .849 & .090 & .767 & .641 & .668 & .847 & .045 & .816 & .756 & .783 & .893 & .052 \\
+UCOS-DA'23 & .750 & .639 & .666 & .808 & .091 & .702 & .604 & .633 & .751 & .148 & .655 & .467 & .495 & .687 & .120 & .731 & .617 & .644 & .785 & .103 \\
+UCOD-DPL'25 & .864 & .825 & .838 & .931 & .031 & .793 & .747 & .779 & .862 & .077 & .834 & .763 & .779 & .916 & .031 & .850 & .818 & .835 & .923 & .043 \\
+\midrule
+\textbf{\methodname{} (Ours)} & \PENDING & \PENDING & \PENDING & \PENDING & \PENDING & \PENDING & \PENDING & \PENDING & \PENDING & \PENDING & \PENDING & \PENDING & \PENDING & \PENDING & \PENDING & \PENDING & \PENDING & \PENDING & \PENDING & \PENDING \\
+\bottomrule
+\end{tabular}%
+}
+\end{table*}
+
+\subsection{Planned Component Ablation Study}
+
+To address \textbf{RQ2}, we outline an ablation matrix on COD10K-Test to systematically measure the effect of each agent module and loss term:
+
+\begin{table}[h]
+\centering
+\caption{\textbf{Planned Ablation Matrix on COD10K-Test.}}
+\label{tab:ablation}
+\begin{tabular}{cccc|ccc}
+\toprule
+QAA & RAA & MA & DA & $S_m\uparrow$ & $F_\beta^w\uparrow$ & $M\downarrow$ \\
+\midrule
+--- & --- & --- & Baseline & .834 & .763 & .031 \\
+$\checkmark$ & --- & --- & Scalar & \PENDING & \PENDING & \PENDING \\
+$\checkmark$ & $\checkmark$ & --- & Dense & \PENDING & \PENDING & \PENDING \\
+$\checkmark$ & $\checkmark$ & $\checkmark$ & CBAM & \PENDING & \PENDING & \PENDING \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%==============================================================================
+\section{Complexity Analysis}
+%==============================================================================
+
+\begin{table}[h]
+\centering
+\caption{Parameter and Memory Overhead of \methodname{}.}
+\label{tab:complexity}
+\begin{tabular}{lrrll}
+\toprule
+Component & Params & FLOPs & Memory & GPU \\
+\midrule
+QAA & $\sim$48K & $O(420HW)$ & Negligible & Yes \\
+RAA & 0 & $O(N_r C)$ & Negligible & No \\
+Memory Agent & 0 & $O(HW)$ & 150MB (CPU) & No \\
+Decision Agent & $\sim$30K & $O(280HW)$ & Negligible & Yes \\
+\midrule
+\textbf{Total Multi-Agent} & \textbf{$\sim$78K} & $O(700HW)$ & \textbf{150MB} & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Zero Inference Latency:} Because QAA, RAA, MA, and DA operate only during training to compute $W_i(x,y)$ for backpropagation, the deployed model at inference time contains zero multi-agent overhead.
+
+%==============================================================================
+\section{Conclusion \& Next Steps}
+%==============================================================================
+
+This research exploration presents the mathematical architecture and multi-agent formulation of \methodname{}. By replacing rigid scalar supervision with four collaborating training agents (QAA, RAA, MA, DA), our goal is to investigate spatial pseudo-label calibration in unsupervised camouflaged object detection. The next phase will execute GPU cluster training to evaluate these research hypotheses across standard COD benchmarks.
+
+%==============================================================================
+% References
+%==============================================================================
+{\small
+\bibliographystyle{ieee_fullname}
+\begin{thebibliography}{20}
+
+\bibitem{ucoddpl}
+W.~Yan, L.~Chen, H.~Ko, S.~Zhang, Y.~Zhang, and L.~Cao.
+\newblock {UCOD-DPL}: Unsupervised Camouflaged Object Detection via Dynamic Pseudo-label Learning.
+\newblock In \emph{CVPR}, 2025.
+
+\bibitem{ease}
+X.~Hao \etal
+\newblock Shift the Lens: Environment-Aware Unsupervised Camouflaged Object Detection.
+\newblock In \emph{CVPR}, 2025.
+
+\bibitem{sinet}
+D.~Fan, G.~Ji, G.~Sun, M.~Cheng, J.~Shen, and L.~Shao.
+\newblock Camouflaged Object Detection.
+\newblock In \emph{CVPR}, 2020.
+
+\bibitem{zoomnet}
+Y.~Pang, X.~Zhao, T.-Z. Xiang, L.~Zhang, and H.~Lu.
+\newblock Zoom in and out: A mixed-scale triplet network for camouflaged object detection.
+\newblock In \emph{CVPR}, 2022.
+
+\bibitem{camoteacher}
+X.~Lai \etal
+\newblock CamoTeacher: Dual-Rotation Consistency Learning for Semi-Supervised Camouflaged Object Detection.
+\newblock In \emph{ECCV}, 2024.
+
+\bibitem{found}
+O.~Sim{\'e}oni \etal
+\newblock Unsupervised Object Localization: Observing the Background to Discover Objects.
+\newblock In \emph{CVPR}, 2023.
+
+\bibitem{ucosda}
+O.~Sim{\'e}oni \etal
+\newblock Unsupervised Object Localization with Self-supervised Transformers.
+\newblock 2023.
+
+\bibitem{dino}
+M.~Caron \etal
+\newblock Emerging Properties in Self-Supervised Vision Transformers.
+\newblock In \emph{ICCV}, 2021.
+
+\bibitem{byol}
+J.-B.~Grill \etal
+\newblock Bootstrap Your Own Latent: A New Approach to Self-Supervised Learning.
+\newblock In \emph{NeurIPS}, 2020.
+
+\bibitem{meanteacher}
+A.~Tarvainen and H.~Valpola.
+\newblock Mean Teachers are Better Role Models.
+\newblock In \emph{NeurIPS}, 2017.
+
+\end{thebibliography}
+}
+
+\end{document}
