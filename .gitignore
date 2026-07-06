@@ -181,3 +181,9 @@ __pycache__/
 outputs/*
 tmp/*
 emeasure_comparison*
+
+# Dataset folders (too large for git)
+data/
+datasets/
+*.DS_Store
+.DS_Store
