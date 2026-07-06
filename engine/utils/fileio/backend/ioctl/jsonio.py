@@ -1,5 +1,7 @@
 import os
 import json
+from .baseio import BaseFileIO
+from ..filetype import JSONType
 
 class JSONIO(BaseFileIO):
     """A class to handle reading and writing json files.
