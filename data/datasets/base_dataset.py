@@ -64,22 +64,57 @@ class BaseCODDataset(Dataset):
         self.transform_label = ImageTransforms.get_label_transform(self.image_size, self.load_all or self.keep_size)
     
     def _setup_file_paths(self, dataset_dir: str) -> None:
-        """Setup image and label file paths."""
+        """Setup image and label file paths with automatic fallback directory resolution."""
         self.img_io = ImageIO(backend='PIL')
         self.image_paths = []
         self.label_paths = []
         
+        # Candidate root directories to check for dataset
+        candidates = [
+            dataset_dir,
+            './datasets/RefCOD',
+            './RefCOD',
+            '../datasets/RefCOD',
+            os.path.expanduser('~/datasets/RefCOD'),
+            os.path.expanduser('~/Desktop/unsupervised-research/datasets/RefCOD'),
+        ]
+        
+        resolved_dir = None
+        for candidate in candidates:
+            if candidate and os.path.exists(candidate):
+                test_paths = []
+                for ds in self.config.DATASET.split('+'):
+                    img_dir = os.path.join(candidate, ds, 'im')
+                    if os.path.exists(img_dir):
+                        test_paths.extend(self.img_io.list_dir_image(img_dir))
+                if len(test_paths) > 0:
+                    resolved_dir = candidate
+                    break
+        
+        if resolved_dir is None:
+            resolved_dir = dataset_dir
+
         for dataset in self.config.DATASET.split('+'):
-            image_dir = os.path.join(dataset_dir, dataset, 'im')
-            label_dir = os.path.join(dataset_dir, dataset, 'gt')
-            self.image_paths.extend(self.img_io.list_dir_image(image_dir))
-            if self.require_label:
+            image_dir = os.path.join(resolved_dir, dataset, 'im')
+            label_dir = os.path.join(resolved_dir, dataset, 'gt')
+            if os.path.exists(image_dir):
+                self.image_paths.extend(self.img_io.list_dir_image(image_dir))
+            if self.require_label and os.path.exists(label_dir):
                 self.label_paths.extend(self.img_io.list_dir_image(label_dir))
         
         self.image_paths = sorted(self.image_paths)
         if self.label_paths:
             self.label_paths = sorted(self.label_paths)
             
+        if len(self.image_paths) == 0:
+            searched_dirs = [os.path.join(resolved_dir, d, 'im') for d in self.config.DATASET.split('+')]
+            raise RuntimeError(
+                f"\n[Dataset Path Error] No images found for dataset '{self.config.DATASET}'!\n"
+                f"  Searched dataset root: '{os.path.abspath(resolved_dir)}'\n"
+                f"  Expected image directories: {searched_dirs}\n"
+                f"  Please ensure images (.jpg/.png) exist in '{os.path.abspath(resolved_dir)}/TR-CAMO/im' and 'TR-COD10K/im'."
+            )
+
         if self.require_label:
             self._check_file_mapping(self.image_paths, self.label_paths)
     
