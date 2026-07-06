@@ -58,6 +58,7 @@ cfg = dict(
         dis_use_features=False,
     ),
     dataset_cfg=dict(
+        dataset_dir='./datasets/RefCOD',
         cache_dir='./datasets/cache',
         val_loader_cfg = dict(
             batch_size=1,
