@@ -2,7 +2,7 @@ import os
 
 from scripts.args import parse_train_args
 import torch.multiprocessing as mp
-from engine.runner.runner import Runner
+from engine.runner.runner import create_runner
 from engine.config.config import CfgNode
 
 DATASET = ['CHAMELEON', 'TE-CAMO', 'TE-COD10K', 'NC4K']
@@ -28,7 +28,7 @@ def main():
     for dataset in DATASET:
         cfg.dataset_cfg.valset_cfg.DATASET = dataset
         print("running {}".format(dataset))
-        runner = Runner(cfg)
+        runner = create_runner(cfg)
         runner.launch_val_look_twice()
 
 
