@@ -2,7 +2,7 @@ import os
 
 from scripts.args import parse_train_args
 import torch.multiprocessing as mp
-from engine.runner.runner import StandardRunner
+from engine.runner.runner import create_runner
 from engine.config.config import CfgNode
 from engine.utils.seed import set_random_seed
 
@@ -25,7 +25,7 @@ def main():
     args = parse_train_args()
     
     cfg = init_cfg(args)
-    runner = StandardRunner(cfg)
+    runner = create_runner(cfg)
     runner.launch_train()
 
 if __name__ == "__main__":
