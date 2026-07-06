@@ -1,6 +1,4 @@
-from .baseio import BaseFileIO
-from ..filetype import JSONType
-
+import os
 import json
 
 class JSONIO(BaseFileIO):
@@ -15,5 +13,6 @@ class JSONIO(BaseFileIO):
     
     @staticmethod
     def write_file(filepath, obj):
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
         with open(filepath, 'w') as f:
             json.dump(obj, f)
