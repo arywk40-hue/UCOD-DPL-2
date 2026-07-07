@@ -285,19 +285,22 @@ class StandardRunner(BaseRunner):
         super().__init__(config)
     
     def _build_model(self) -> None:
-        """Build baseline model and discriminator."""
+        """Build baseline model and optionally discriminator."""
         try:
             self.model = baseline(self.config.model_cfg)
-            self.discriminator = Discriminator(self.config.model_cfg)
+            # Skip discriminator when merge_method is 'none'
+            if self.config.train_cfg.get('merge_method', 'dis') != 'none':
+                self.discriminator = Discriminator(self.config.model_cfg)
             self.load_checkpoint()  # Load checkpoint after model creation
-            self.logger.info("Successfully built baseline model and discriminator")
+            self.logger.info("Successfully built baseline model")
         except Exception as e:
             raise RuntimeError(f"Failed to build models: {e}")
     
     def _build_optimizer(self) -> None:
-        """Build optimizers and schedulers for model and discriminator."""
+        """Build optimizers and schedulers."""
         try:
             config = self.config.train_cfg
+            use_discriminator = self.config.train_cfg.get('merge_method', 'dis') != 'none'
             
             # Model optimizer
             self.optimizer = torch.optim.AdamW(
@@ -305,11 +308,12 @@ class StandardRunner(BaseRunner):
                 lr=config.lr0
             )
             
-            # Discriminator optimizer
-            self.dis_optimizer = torch.optim.AdamW(
-                self.discriminator.parameters(),
-                lr=config.dis_lr0
-            )
+            # Discriminator optimizer (skip if no discriminator)
+            if use_discriminator:
+                self.dis_optimizer = torch.optim.AdamW(
+                    self.discriminator.parameters(),
+                    lr=config.dis_lr0
+                )
             
             # Learning rate schedulers
             self.lr_scheduler = torch.optim.lr_scheduler.StepLR(
@@ -318,11 +322,12 @@ class StandardRunner(BaseRunner):
                 gamma=config.step_lr_gamma
             )
             
-            self.dis_lr_scheduler = torch.optim.lr_scheduler.StepLR(
-                self.dis_optimizer,
-                step_size=config.dis_step_lr_size,
-                gamma=config.dis_step_lr_gamma
-            )
+            if use_discriminator:
+                self.dis_lr_scheduler = torch.optim.lr_scheduler.StepLR(
+                    self.dis_optimizer,
+                    step_size=config.dis_step_lr_size,
+                    gamma=config.dis_step_lr_gamma
+                )
             
             self.logger.info("Successfully built optimizers and schedulers")
         except Exception as e:
@@ -349,45 +354,45 @@ class StandardRunner(BaseRunner):
     
     def _prepare_accelerator(self) -> None:
         """Prepare all components for distributed training."""
-        # Validate all components are initialized
-        required_components = {
+        use_discriminator = self.config.train_cfg.get('merge_method', 'dis') != 'none'
+        
+        # Validate core components
+        for name, component in {
             'accelerator': self.accelerator,
             'model': self.model,
-            'discriminator': self.discriminator,
             'optimizer': self.optimizer,
-            'dis_optimizer': self.dis_optimizer,
             'train_dataloader': self.train_dataloader,
             'lr_scheduler': self.lr_scheduler,
-            'dis_lr_scheduler': self.dis_lr_scheduler
-        }
-        
-        for name, component in required_components.items():
+        }.items():
             if component is None:
                 raise RuntimeError(f"{name} has not been initialized")
         
         try:
-            # Prepare components for distributed training
-            (
-                self.model,
-                self.discriminator,
-                self.optimizer,
-                self.train_dataloader,
-                self.lr_scheduler,
-                self.dis_optimizer,
-                self.dis_lr_scheduler
-            ) = self.accelerator.prepare(
-                self.model,
-                self.discriminator,
-                self.optimizer,
-                self.train_dataloader,
-                self.lr_scheduler,
-                self.dis_optimizer,
-                self.dis_lr_scheduler
-            )
+            if use_discriminator:
+                # Validate discriminator components
+                if self.discriminator is None:
+                    raise RuntimeError("discriminator has not been initialized")
+                if self.dis_optimizer is None:
+                    raise RuntimeError("dis_optimizer has not been initialized")
+                if self.dis_lr_scheduler is None:
+                    raise RuntimeError("dis_lr_scheduler has not been initialized")
+                
+                (self.model, self.discriminator, self.optimizer, self.train_dataloader,
+                 self.lr_scheduler, self.dis_optimizer, self.dis_lr_scheduler
+                ) = self.accelerator.prepare(
+                    self.model, self.discriminator, self.optimizer, self.train_dataloader,
+                    self.lr_scheduler, self.dis_optimizer, self.dis_lr_scheduler
+                )
+                self.discriminator = self.discriminator.module if hasattr(self.discriminator, "module") else self.discriminator
+            else:
+                # No discriminator — prepare only model components
+                (self.model, self.optimizer, self.train_dataloader, self.lr_scheduler
+                ) = self.accelerator.prepare(
+                    self.model, self.optimizer, self.train_dataloader, self.lr_scheduler
+                )
             
-            # Unwrap models if needed
+            # Unwrap model
             self.model = self.model.module if hasattr(self.model, "module") else self.model
-            self.discriminator = self.discriminator.module if hasattr(self.discriminator, "module") else self.discriminator
             
             # Prepare validation dataloader
             self.val_dataloader = self.accelerator.prepare(self.val_dataloader)

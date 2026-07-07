@@ -164,7 +164,7 @@ class TrainLoop(BaseLoop):
         loss = self.criterion(
             flat_preds, flat_pseudo_labels
         )
-        if dis_loss != None and not self.finetune:
+        if dis_loss is not None and not self.finetune:
             loss -= dis_loss
             self.runner.logger.log('train/dis_loss:{:.4f}'.format(dis_loss))
         
@@ -191,7 +191,7 @@ class TrainLoop(BaseLoop):
             ema_buffer.data.copy_(buffer.data)
 
     def decide_to_train_dis(self):
-        if self.cfg.train_cfg.merge_method != 'dis':
+        if self.cfg.train_cfg.get('merge_method', 'dis') != 'dis':
             return False
         if self._cur_epoch % self.dis_intertrain == 0 and not self.finetune:
             return True
@@ -255,6 +255,10 @@ class TrainLoop(BaseLoop):
         self.progress_manager.reset_task("Discriminator Iteration")
 
     def merge_pseudo_label(self, pseudo_labels, p_teachers, p_students, features):
+        # Pure mode: use fixed pseudo-labels directly, no APM mixing
+        if self.cfg.train_cfg.get('merge_method', 'dis') == 'none':
+            return pseudo_labels, None
+
         p_teachers = (p_teachers.sigmoid()>0.5).float()
         p_students = (p_students.sigmoid()>0.5).float()
         p_s = self.runner.discriminator(p_students, features)
