@@ -5,7 +5,7 @@ from models.uscod import baseline
 from models.modules.ocm import ocm
 from data.utils.feature_extractor import build_feature_extractor
 from engine.config.config import CfgNode
-from safetensors.torch import load_file
+# Removed safetensors import - using torch.load for .pth checkpoints
 from peft import get_peft_model, LoraConfig, TaskType
 import os 
 import copy
@@ -27,7 +27,16 @@ def get_full_model(cfg=None, checkpoint_path=None):
         cfg = load_config()
     model = baseline(cfg.model_cfg)
     if checkpoint_path and os.path.isfile(checkpoint_path):
-        model.load_state_dict(load_file(checkpoint_path, device="cuda"))
+        # Load checkpoint using torch.load (for .pth files)
+        state_dict = torch.load(checkpoint_path, map_location="cuda", weights_only=False)
+        
+        # Handle nested checkpoint structure
+        if isinstance(state_dict, dict) and 'model_state_dict' in state_dict:
+            state_dict = state_dict['model_state_dict']
+        elif isinstance(state_dict, dict) and 'state_dict' in state_dict:
+            state_dict = state_dict['state_dict']
+        
+        model.load_state_dict(state_dict)
     feature_extractor = build_feature_extractor(cfg.dataset_cfg.feature_extractor_cfg)
     feature_extractor = ViTLoraWrapper(feature_extractor)
     # freeze_model(feature_extractor)

@@ -23,7 +23,7 @@ from abc import ABC, abstractmethod
 # Core dependencies
 from torch import nn
 from accelerate import Accelerator
-from safetensors.torch import load_file
+# Removed safetensors import - using torch.load for .pth checkpoints
 
 # Model imports
 from models.uscod import baseline
@@ -203,11 +203,20 @@ class BaseRunner(ABC):
             self.logger.info("No checkpoint specified or discovered; starting from scratch")
             return
         try:
-            state_dict = load_file(checkpoint_path, device="cuda")
+            # Load checkpoint using torch.load (for .pth files)
+            state_dict = torch.load(checkpoint_path, map_location="cuda", weights_only=False)
+            
+            # Handle nested checkpoint structure (e.g., {'model_state_dict': ...})
+            if isinstance(state_dict, dict) and 'model_state_dict' in state_dict:
+                state_dict = state_dict['model_state_dict']
+            elif isinstance(state_dict, dict) and 'state_dict' in state_dict:
+                state_dict = state_dict['state_dict']
+            
             self.model.load_state_dict(state_dict)
             self.logger.info("Successfully loaded checkpoint weights from {}".format(checkpoint_path))
         except Exception as e:
             self.logger.error(f"Failed to load checkpoint: {e}")
+            raise RuntimeError(f"Checkpoint loading failed: {e}. Cannot continue with random weights.")
     
     def _find_latest_checkpoint(self, ckp_type) -> Optional[str]:
         """
