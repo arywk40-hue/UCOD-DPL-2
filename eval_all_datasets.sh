@@ -7,7 +7,7 @@ CONFIG="configs/uscod/ADF_dinov2.py"
 CHECKPOINT="work_dir/uscod/ADF_dinov2/UCOD-ADF/ckp/epoch25.pth"
 
 # Check if checkpoint exists
-if [ ! -f "$CHECKPOINT" ]; then
+if [ ! -e "$CHECKPOINT" ]; then
     echo "ERROR: Checkpoint not found at $CHECKPOINT"
     echo "Available checkpoints:"
     ls -lh work_dir/uscod/ADF_dinov2/UCOD-ADF/ckp/

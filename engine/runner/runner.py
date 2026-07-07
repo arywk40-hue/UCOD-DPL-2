@@ -203,8 +203,17 @@ class BaseRunner(ABC):
             self.logger.info("No checkpoint specified or discovered; starting from scratch")
             return
         try:
-            # Load checkpoint using torch.load (for .pth files)
-            state_dict = torch.load(checkpoint_path, map_location="cuda", weights_only=False)
+            # Load checkpoint - handles both flat .pth files (torch.save)
+            # and accelerate's save_model() directory format (safetensors)
+            if os.path.isdir(checkpoint_path):
+                safetensors_path = os.path.join(checkpoint_path, "model.safetensors")
+                if os.path.exists(safetensors_path):
+                    from safetensors.torch import load_file
+                    state_dict = load_file(safetensors_path)
+                else:
+                    raise FileNotFoundError(f"No model.safetensors found in {checkpoint_path}")
+            else:
+                state_dict = torch.load(checkpoint_path, map_location="cuda", weights_only=False)
             
             # Handle nested checkpoint structure (e.g., {'model_state_dict': ...})
             if isinstance(state_dict, dict) and 'model_state_dict' in state_dict:
