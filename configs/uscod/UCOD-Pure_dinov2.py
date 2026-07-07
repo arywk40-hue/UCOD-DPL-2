@@ -12,6 +12,12 @@ cfg = dict(
         step_lr_size=25,
         step_lr_gamma=0.95,
         merge_method='none',  # No APM, no agents — pure fixed pseudo-labels
+        # Placeholder values for fields referenced by StandardRunner
+        dis_epoch=1,
+        dis_lr0=1e-3,
+        dis_intertrain=2,
+        dis_step_lr_size=25,
+        dis_step_lr_gamma=0.95,
     ),
     val_cfg = dict(
         look_twice=True,
