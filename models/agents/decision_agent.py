@@ -100,7 +100,7 @@ class DecisionAgent(nn.Module):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
 
-        nn.init.constant_(self.mixing_head.bias, 0.0)
+        nn.init.constant_(self.mixing_head.bias, 1.0)
         nn.init.constant_(self.lt_head.bias, -2.0)
 
     def forward(

@@ -20,9 +20,9 @@ cfg = dict(
             empty_pseudo_label_policy='error',
 
             # ── Loss weights ──
-            lambda_conf=0.5,       # confidence calibration (QAA)
-            lambda_region=0.1,     # region consistency (RAA)
-            lambda_temporal=0.3,   # temporal consistency (Memory)
+            lambda_conf=0.3,       # confidence calibration (QAA)
+            lambda_region=0.2,     # region consistency (RAA)
+            lambda_temporal=0.2,   # temporal consistency (Memory)
             
             # ── Agent 1: QAA ──
             qaa_delta=0.3,         # agreement threshold for self-supervised target
@@ -36,7 +36,7 @@ cfg = dict(
             
             # ── Agent 3: Memory ──
             memory_alpha=0.95,     # EMA decay (slow update for trends)
-            memory_warmup=3,       # minimum visits before stability is meaningful
+            memory_warmup=8,       # minimum visits before stability is meaningful
             
             # ── Agent 4: Decision Agent ──
             da_hidden_dim=64,      # hidden channels

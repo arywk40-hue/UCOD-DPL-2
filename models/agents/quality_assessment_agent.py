@@ -157,6 +157,7 @@ class QualityAssessmentAgent(nn.Module):
         Self-supervised confidence calibration loss.
         """
         disagreement = compute_disagreement(teacher_logits, fixed_strategy_mask)
-        target = (disagreement < self.delta).float()
+        # Soft target: linearly decays from 1.0 (reliable) to 0.0 (unreliable)
+        target = (1.0 - disagreement / self.delta).clamp(0.0, 1.0)
         loss = F.binary_cross_entropy(reliability_map, target)
         return loss

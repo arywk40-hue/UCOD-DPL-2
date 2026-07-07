@@ -35,7 +35,7 @@
 %==============================================================================
 \begin{abstract}
 %==============================================================================
-Unsupervised Camouflaged Object Detection (UCOD) aims to segment targets visually blended into surrounding environments without human-annotated ground truth masks. Conventional pseudo-labeling pipelines rely on fixed heuristics and global scalar weighting functions that assume spatially uniform label noise. However, pseudo-label noise in camouflaged scenes is inherently non-stationary, concentrating heavily at complex boundaries, low-contrast visual textures, and small instance regions. In this paper, we present \textbf{\methodname{} (Agentic Decision Framework)}, a novel architecture replacing global scalar supervision with an autonomous multi-agent spatial decision system. Our framework integrates four specialized training agents: (1) a \textbf{Quality Assessment Agent (QAA)} utilizing multi-scale ASPP convolutions and feature gradient magnitude sensing; (2) a \textbf{Region Analysis Agent (RAA)} evaluating foreground-to-background context ring contrast and region topology; (3) a \textbf{Memory Agent (MA)} tracking dual-temporal mean and variance dynamics per training sample; and (4) an \textbf{Attention-Gated Decision Agent (DA)} with Spatial and Channel Attention (CBAM) gating to synthesize spatial supervision maps $W_i(x,y) \in [0,1]^{H \times W}$. The framework is optimized end-to-end using three self-supervised loss terms ($\mathcal{L}_{conf}$, $\mathcal{L}_{region}$, $\mathcal{L}_{temporal}$) while maintaining \textbf{zero inference overhead}. All experimental benchmarks and quantitative metrics will be populated upon completion of model training.
+Unsupervised Camouflaged Object Detection (UCOD) aims to segment targets visually blended into surrounding environments without human-annotated ground truth masks. Conventional pseudo-labeling pipelines rely on fixed heuristics and global scalar weighting functions that assume spatially uniform label noise. However, pseudo-label noise in camouflaged scenes is inherently non-stationary, concentrating heavily at complex boundaries, low-contrast visual textures, and small instance regions. In this paper, we present \textbf{\methodname{} (Agentic Decision Framework)}, a novel architecture replacing global scalar supervision with an autonomous multi-agent spatial decision system. Our framework integrates four specialized training agents: (1) a \textbf{Quality Assessment Agent (QAA)} utilizing multi-scale ASPP convolutions and feature gradient magnitude sensing; (2) a \textbf{Region Analysis Agent (RAA)} evaluating foreground-to-background context ring contrast and region topology; (3) a \textbf{Memory Agent (MA)} tracking dual-temporal mean and variance dynamics per training sample; and (4) an \textbf{Attention-Gated Decision Agent (DA)} with Spatial and Channel Attention (CBAM) gating to synthesize spatial supervision maps $W_i(x,y) \in [0,1]^{H \times W}$. The framework is optimized end-to-end using three self-supervised loss terms ($\mathcal{L}_{conf}$, $\mathcal{L}_{region}$, $\mathcal{L}_{temporal}$) while maintaining \textbf{zero inference overhead}. We report full quantitative results on four standard COD benchmarks after 25 training epochs.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -161,7 +161,7 @@ P_i(x,y) = W_i(x,y) \cdot \sigma(\hat{P}_i^t) + (1 - W_i(x,y)) \cdot \hat{P}_i^{
 \subsection{Total Loss Objective}
 
 \begin{equation}
-\mathcal{L}_{total} = \mathcal{L}_{seg} + \mathcal{L}_\bot + 0.5 \mathcal{L}_{conf} + 0.1 \mathcal{L}_{region} + 0.3 \mathcal{L}_{temporal}
+\mathcal{L}_{total} = \mathcal{L}_{seg} + \mathcal{L}_\bot + 0.3 \mathcal{L}_{conf} + 0.2 \mathcal{L}_{region} + 0.2 \mathcal{L}_{temporal}
 \end{equation}
 
 %==============================================================================
@@ -203,18 +203,21 @@ P_i(x,y) = W_i(x,y) \cdot \sigma(\hat{P}_i^t) + (1 - W_i(x,y)) \cdot \hat{P}_i^{
 
 \textbf{Metrics:} S-measure ($S_m$), weighted F-measure ($F_\beta^w$), mean F-measure ($F_\beta^m$), E-measure ($E_\phi$), Mean Absolute Error ($M$), accuracy (ACC), and mean Intersection-over-Union (mIoU).
 
-\subsection{Latest Validation Result}
+\subsection{Results at Epoch 25}
 
 \begin{table*}[t]
 \centering
-\caption{Latest validation result for \methodname{} on TE-CAMO.}
-\label{tab:latest_validation}
+\caption{\methodname{} quantitative results across all four test benchmarks, checkpoint at epoch 25.}
+\label{tab:epoch25_results}
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{l|ccccccccc}
 \toprule
-Method & ACC$\uparrow$ & mIoU$\uparrow$ & $E_\phi^{max}\uparrow$ & $E_\phi^{mean}\uparrow$ & $F_\beta^{max}\uparrow$ & $F_\beta^{mean}\uparrow$ & $S_m\uparrow$ & $M\downarrow$ & $F_\beta^w\uparrow$ \\
+Dataset & ACC$\uparrow$ & mIoU$\uparrow$ & $E_\phi^{max}\uparrow$ & $E_\phi^{mean}\uparrow$ & $F_\beta^{max}\uparrow$ & $F_\beta^{mean}\uparrow$ & $S_m\uparrow$ & $M\downarrow$ & $F_\beta^w\uparrow$ \\
 \midrule
-\textbf{\methodname{} (Ours)} & .8188 & .0000 & .2500 & .2500 & .2182 & .0009 & .4099 & .1812 & .0047 \\
+CHAMELEON & .921 & .5788 & .8169 & .8147 & .6408 & .6389 & .734 & .079 & .6162 \\
+TE-CAMO & .8703 & .5525 & .7657 & .7636 & .6231 & .6215 & .6962 & .1297 & .5962 \\
+TE-COD10K & .92 & .481 & .7465 & .7446 & .5442 & .5425 & .683 & .08 & .5202 \\
+NC4K & .9138 & .5809 & .8071 & .8049 & .6455 & .6437 & .7295 & .0862 & .6255 \\
 \bottomrule
 \end{tabular}%
 }
@@ -224,7 +227,7 @@ Method & ACC$\uparrow$ & mIoU$\uparrow$ & $E_\phi^{max}\uparrow$ & $E_\phi^{mean
 
 \begin{table*}[t]
 \centering
-\caption{Comparison with state-of-the-art methods across four COD benchmarks. Quantitative metric values for \methodname{} will be populated post-training.}
+\caption{Comparison with state-of-the-art methods across four COD benchmarks.}
 \label{tab:sota}
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{l|ccccc|ccccc|ccccc|ccccc}
@@ -244,7 +247,7 @@ FOUND'23 & .829 & .757 & .781 & .911 & .040 & .770 & .704 & .740 & .849 & .090 &
 UCOS-DA'23 & .750 & .639 & .666 & .808 & .091 & .702 & .604 & .633 & .751 & .148 & .655 & .467 & .495 & .687 & .120 & .731 & .617 & .644 & .785 & .103 \\
 UCOD-DPL'25 & .864 & .825 & .838 & .931 & .031 & .793 & .747 & .779 & .862 & .077 & .834 & .763 & .779 & .916 & .031 & .850 & .818 & .835 & .923 & .043 \\
 \midrule
-\textbf{\methodname{} (Ours)} & \PENDING & \PENDING & \PENDING & \PENDING & \PENDING & \PENDING & \PENDING & \PENDING & \PENDING & \PENDING & \PENDING & \PENDING & \PENDING & \PENDING & \PENDING & \PENDING & \PENDING & \PENDING & \PENDING & \PENDING \\
+\textbf{\methodname{} (Ours)} & .734 & .6162 & .6389 & .8147 & .079 & .6962 & .5962 & .6215 & .7636 & .1297 & .683 & .5202 & .5425 & .7446 & .08 & .7295 & .6255 & .6437 & .8049 & .0862 \\
 \bottomrule
 \end{tabular}%
 }
@@ -263,7 +266,7 @@ QAA & RAA & MA & DA & $S_m\uparrow$ & $F_\beta^w\uparrow$ & $M\downarrow$ \\
 --- & --- & --- & Baseline & .834 & .763 & .031 \\
 $\checkmark$ & --- & --- & Scalar & \PENDING & \PENDING & \PENDING \\
 $\checkmark$ & $\checkmark$ & --- & Dense & \PENDING & \PENDING & \PENDING \\
-$\checkmark$ & $\checkmark$ & $\checkmark$ & CBAM & \PENDING & \PENDING & \PENDING \\
+$\checkmark$ & $\checkmark$ & $\checkmark$ & CBAM & .683 & .5202 & .08 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -298,7 +301,7 @@ Decision Agent & $\sim$30K & $O(280HW)$ & Negligible & Yes \\
 \label{sec:conclusion}
 %==============================================================================
 
-We introduced \methodname{}, an autonomous multi-agent decision framework for Unsupervised Camouflaged Object Detection. By replacing global scalar mixing with spatial evidence synthesis across Quality Assessment (QAA), Region Analysis (RAA), Dual Temporal Memory (MA), and Attention-Gated Decision (DA) agents, \methodname{} achieves spatial supervision calibration with zero inference overhead. Quantitative results will be populated post-training.
+We introduced \methodname{}, an autonomous multi-agent decision framework for Unsupervised Camouflaged Object Detection. By replacing global scalar mixing with spatial evidence synthesis across Quality Assessment (QAA), Region Analysis (RAA), Dual Temporal Memory (MA), and Attention-Gated Decision (DA) agents, \methodname{} achieves spatial supervision calibration with zero inference overhead. At epoch 25, \methodname{} attains an $S_m$ of .734 on CHAMELEON, .6962 on CAMO-Test, .683 on COD10K-Test, and .7295 on NC4K; current results trail the UCOD-DPL baseline, and further investigation into training convergence and hyperparameter tuning is ongoing.
 
 \bibliographystyle{IEEEtran}
 \begin{thebibliography}{10}
