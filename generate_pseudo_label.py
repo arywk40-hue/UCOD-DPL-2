@@ -70,7 +70,8 @@ def refine_post_process(mask, area_threshold=4):
 def generate_mask(image_path, th_bkg=0.6):
     """Generate pseudo label mask for a single image."""
     image = Image.open(image_path).convert('RGB')
-    inputs = transform(image).unsqueeze(0)
+    device = next(model.parameters()).device
+    inputs = transform(image).unsqueeze(0).to(device)
     
     with torch.no_grad():
         outputs = model(inputs)
@@ -103,12 +104,16 @@ def main():
                        help='Template path for images (use {} as placeholder for dataset name)')
     parser.add_argument('--cache_path', type=str, default='./datasets/cache/pseudo_label_cache/',
                        help='Path to save cache files')
+    parser.add_argument('--force', action='store_true',
+                       help='Regenerate labels even when a valid cache already exists')
     
     args = parser.parse_args()
     
     # Initialize global variables
     global model, transform
-    model = AutoModel.from_pretrained('facebook/dinov2-base', output_attentions=True)
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model = AutoModel.from_pretrained('facebook/dinov2-base', output_attentions=True).to(device)
+    model.eval()
     model.encoder.layer[-1].attention.attention.key.register_forward_hook(hook_fn_key)
     
     transform = transforms.Compose([
@@ -122,6 +127,13 @@ def main():
     
     # Initialize cache
     cacheio = MetaListPickleIO(base_path=os.path.join(args.cache_path, args.dataset))
+    if cacheio.mode == 'r' and not args.force:
+        print(f"Pseudo-label cache already exists for {args.dataset}: {cacheio.base_path}")
+        print("Use --force to regenerate it.")
+        return
+    if cacheio.mode == 'r' and args.force:
+        cacheio.mode = 'w'
+        cacheio.index_map = {}
     
     # Collect image paths
     image_paths = []
@@ -131,6 +143,8 @@ def main():
             raise ValueError(f'Image path {dir_path} does not exist!')
         
         for name in os.listdir(dir_path):
+            if not name.lower().endswith(('.jpg', '.jpeg', '.png')):
+                continue
             image_paths.append(os.path.join(dir_path, name))
     
     image_paths = sorted(image_paths)

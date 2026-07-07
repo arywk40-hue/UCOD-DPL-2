@@ -55,9 +55,11 @@ class ADFTrainLoop:
         self.lambda_conf = adf_cfg.lambda_conf
         self.lambda_region = adf_cfg.lambda_region
         self.lambda_temporal = adf_cfg.lambda_temporal
+        self.empty_pseudo_label_policy = getattr(adf_cfg, 'empty_pseudo_label_policy', 'error')
 
         feature_size = self.cfg.model_cfg.feature_size
         dataset_size = len(self.runner.train_dataloader.dataset)
+        self._validate_pseudo_label_cache_if_needed()
 
         # Initialize Enhanced Agents
         self.qaa = QualityAssessmentAgent(
@@ -98,6 +100,30 @@ class ADFTrainLoop:
     @property
     def runner(self):
         return self._runner
+
+    def _validate_pseudo_label_cache_if_needed(self) -> None:
+        if self.empty_pseudo_label_policy != 'error':
+            return
+
+        dataset = self.runner.train_dataloader.dataset
+        pseudo_cache = dataset.cache_manager.get_pseudo_label_cache()
+        expected = len(dataset)
+
+        if pseudo_cache is None or pseudo_cache.mode != 'r' or pseudo_cache.length() != expected:
+            cache_path = getattr(pseudo_cache, 'base_path', os.path.join(
+                self.cfg.dataset_cfg.cache_dir,
+                'pseudo_label_cache',
+                self.cfg.dataset_cfg.trainset_cfg.DATASET,
+            ))
+            raise RuntimeError(
+                "\n[ADF Pseudo Label Error] Fixed-strategy pseudo labels are required for stable ADF training.\n"
+                f"  Expected cache: {cache_path}\n"
+                f"  Expected entries: {expected}\n"
+                "  Generate the cache with:\n"
+                f"    python generate_pseudo_label.py --dataset '{self.cfg.dataset_cfg.trainset_cfg.DATASET}'\n"
+                "  For a debugging-only run, set:\n"
+                "    --opts train_cfg.adf_cfg.empty_pseudo_label_policy zeros\n"
+            )
 
     def _setup_agent_optimizer(self):
         agent_params = list(self.qaa.parameters()) + list(self.da.parameters())
@@ -186,9 +212,13 @@ class ADFTrainLoop:
         h = w = self.cfg.model_cfg.feature_size
         features = F.interpolate(features, size=(h, w), mode='bilinear')
         
-        # Handle None pseudo_labels (unpopulated cache) by creating dummy labels
+        # Debug-only fallback for unpopulated pseudo-label cache.
         if isinstance(pseudo_labels, list):
-            # Create initial pseudo labels with zeros (will be replaced by teacher predictions)
+            if self.empty_pseudo_label_policy != 'zeros':
+                raise RuntimeError(
+                    "Pseudo labels are missing. Generate them with "
+                    f"`python generate_pseudo_label.py --dataset '{self.cfg.dataset_cfg.trainset_cfg.DATASET}'`."
+                )
             batch_size = features.shape[0]
             pseudo_labels = torch.zeros((batch_size, 1, h, w), device=features.device).float()
         else:

@@ -24,6 +24,8 @@ def init_cfg(args) -> CfgNode:
         cfg.train_cfg.resume = args.resume
     if args.refiner_path is not None:
         cfg.train_cfg.refiner_path = args.refiner_path
+    if args.opts:
+        cfg.merge_from_list(args.opts)
     return cfg
 
 def main():

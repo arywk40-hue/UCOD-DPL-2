@@ -201,7 +201,24 @@ P_i(x,y) = W_i(x,y) \cdot \sigma(\hat{P}_i^t) + (1 - W_i(x,y)) \cdot \hat{P}_i^{
 \subsection{Experimental Settings}
 \textbf{Datasets:} CAMO-Train (1000) + COD10K-Train (3040) without ground-truth labels. Evaluation: CHAMELEON (76), CAMO-Test (250), COD10K-Test (2026), NC4K (4121).
 
-\textbf{Metrics:} S-measure ($S_m$), weighted F-measure ($F_\beta^w$), mean F-measure ($F_\beta^m$), E-measure ($E_\phi$), Mean Absolute Error ($M$).
+\textbf{Metrics:} S-measure ($S_m$), weighted F-measure ($F_\beta^w$), mean F-measure ($F_\beta^m$), E-measure ($E_\phi$), Mean Absolute Error ($M$), accuracy (ACC), and mean Intersection-over-Union (mIoU).
+
+\subsection{Latest Validation Result}
+
+\begin{table*}[t]
+\centering
+\caption{Latest validation result for \methodname{} on TE-CAMO.}
+\label{tab:latest_validation}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{l|ccccccccc}
+\toprule
+Method & ACC$\uparrow$ & mIoU$\uparrow$ & $E_\phi^{max}\uparrow$ & $E_\phi^{mean}\uparrow$ & $F_\beta^{max}\uparrow$ & $F_\beta^{mean}\uparrow$ & $S_m\uparrow$ & $M\downarrow$ & $F_\beta^w\uparrow$ \\
+\midrule
+\textbf{\methodname{} (Ours)} & .8188 & .0000 & .2500 & .2500 & .2182 & .0009 & .4099 & .1812 & .0047 \\
+\bottomrule
+\end{tabular}%
+}
+\end{table*}
 
 \subsection{Comparison with State-of-the-Art}
 

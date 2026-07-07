@@ -28,6 +28,20 @@ if [ -d "data/RefCOD" ]; then
         echo "  - TR-CAMO images: $TR_CAMO_COUNT"
         echo "  - TR-COD10K images: $TR_COD10K_COUNT"
         echo ""
+
+        if [ "$TR_CAMO_COUNT" -eq 0 ] || [ "$TR_COD10K_COUNT" -eq 0 ]; then
+            echo "✗ ERROR: Dataset folders exist, but one or more image folders are empty."
+            echo ""
+            echo "Expected non-empty folders:"
+            echo "  data/RefCOD/TR-CAMO/im/"
+            echo "  data/RefCOD/TR-COD10K/im/"
+            echo ""
+            echo "If the dataset was extracted into a nested directory, locate it with:"
+            echo "  find data/RefCOD -type f \\( -iname '*.jpg' -o -iname '*.png' -o -iname '*.jpeg' \\) | head"
+            echo ""
+            echo "Move or copy the images into the expected folders, then run this script again."
+            exit 1
+        fi
         
         # Create symlink
         if [ -L "datasets" ]; then

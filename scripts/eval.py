@@ -19,6 +19,8 @@ def init_cfg(args) -> CfgNode:
     )
     os.makedirs(cfg.work_dir, exist_ok=True)
     cfg.launcher = args.launcher
+    if args.opts:
+        cfg.merge_from_list(args.opts)
     return cfg
 
 

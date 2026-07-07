@@ -15,6 +15,10 @@ cfg = dict(
         merge_method='adf',
         # Agentic Decision Framework configuration
         adf_cfg = dict(
+            # Require fixed-strategy pseudo labels by default. Training with
+            # empty labels usually collapses to all-background predictions.
+            empty_pseudo_label_policy='error',
+
             # ── Loss weights ──
             lambda_conf=0.5,       # confidence calibration (QAA)
             lambda_region=0.1,     # region consistency (RAA)

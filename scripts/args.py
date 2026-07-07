@@ -9,6 +9,12 @@ def parse_train_args():
     parser.add_argument('--resume', type=str, default=None, help='resume from checkpoint')
     parser.add_argument('--load_from', type=str, default=None, help='load from checkpoint')
     parser.add_argument('--refiner_path', type=str, default=None, help='load refiner checkpoint')
+    parser.add_argument(
+        '--opts',
+        nargs=argparse.REMAINDER,
+        default=None,
+        help='Override config options using KEY VALUE pairs, e.g. --opts train_cfg.lr0 1e-4'
+    )
     parser.add_argument('--launcher',
                         choices=['none', 'pytorch', 'slurm', 'mpi'],
                         default='none',
